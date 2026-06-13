@@ -1,0 +1,17 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="TrapBattle Server"
+config/features=PackedStringArray("4.6")
+run/main_scene="res://scenes/Main.tscn"
+
+[autoload]
+
+Config="*res://scripts/config.gd"
+
+[display]
+
+window/size/viewport_width=1
+window/size/viewport_height=1
