@@ -1,17 +1,20 @@
 extends Node3D
 class_name ServerPlayer
 
-var role: String = "player"
+var peer_id:      int = 0
+var player_index: int = 0
 var game_manager: GameManager
 var trap_manager: Node
-var robot_ref: Node3D
+
+func _ready() -> void:
+	add_to_group("players")
+	position = game_manager.grid_to_world(game_manager.get_spawn_for_index(player_index))
 
 # Receive position broadcast from the authoritative client
 @rpc("authority", "unreliable")
 func _net_pos(pos: Vector3, y: float) -> void:
-	if is_multiplayer_authority():
-		return
-	position  = pos
+	if is_multiplayer_authority(): return
+	position   = pos
 	rotation.y = y
 
 func get_grid_position() -> Array:

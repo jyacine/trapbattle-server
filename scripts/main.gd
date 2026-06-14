@@ -3,7 +3,7 @@ extends Node3D
 var network_manager: NetworkManager
 var game_manager: GameManager
 var trap_manager: TrapManager
-var _players: Dictionary = {}
+var _players: Dictionary = {}   # peer_id -> ServerPlayer
 
 func _ready() -> void:
 	network_manager = NetworkManager.new()
@@ -25,26 +25,34 @@ func _on_lobby_ready(seed_val: int) -> void:
 	add_child(trap_manager)
 	trap_manager.game_manager = game_manager
 
-	for peer_id in network_manager._role_map:
-		var role: String = network_manager._role_map[peer_id]
+	var assignments = network_manager.assignments   # {peer_id: player_index}
+	for pid in assignments:
+		var idx = assignments[pid]
+		game_manager.register_player(pid)
+
 		var p = ServerPlayer.new()
-		p.name   = "Player" if role == "player" else "Robot"
-		p.role   = role
+		p.name         = "Player_%d" % idx
+		p.peer_id      = pid
+		p.player_index = idx
 		p.game_manager = game_manager
 		p.trap_manager = trap_manager
-		p.set_multiplayer_authority(peer_id)
+		p.set_multiplayer_authority(pid)
 		add_child(p)
-		_players[role] = p
+		_players[pid] = p
 
-	var p1 = _players.get("player") as ServerPlayer
-	var p2 = _players.get("robot")  as ServerPlayer
-	if p1 and p2:
-		p1.robot_ref = p2
-		p2.robot_ref = p1
-		trap_manager.player = p1
-		trap_manager.robot  = p2
+	print("[Server] Game started — seed=%d  %d players" % [seed_val, _players.size()])
 
-	print("[Server] Game started  seed=%d" % seed_val)
-
-func _on_peer_left() -> void:
-	print("[Server] A player disconnected.")
+func _on_peer_left(pid: int) -> void:
+	print("[Server] Player %d disconnected." % pid)
+	if _players.has(pid):
+		var node = _players[pid]
+		if is_instance_valid(node):
+			node.queue_free()
+		_players.erase(pid)
+	if game_manager and is_instance_valid(game_manager):
+		game_manager.player_ids.erase(pid)
+		game_manager.hp.erase(pid)
+		game_manager.lives.erase(pid)
+		game_manager.kills.erase(pid)
+		game_manager.effects.erase(pid)
+		game_manager.respawning.erase(pid)
