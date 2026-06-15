@@ -55,23 +55,21 @@ The `export/` directory is git-ignored.
 
 ## How to deploy to the VM
 
-`deploy.ps1` builds, copies, and restarts the server in one step:
+After exporting, copy the binary to the VM and restart the server:
 
 ```powershell
-# 1. Export first (see above), then:
-.\deploy.ps1
+$IP   = "172.174.208.254"
+$USER = "labadmin"
+
+# Copy binary (and .pck if separate)
+scp "export\linux\TrapBattle Server.x86_64" "${USER}@${IP}:/home/labadmin/TrapBattle_Server"
+scp "export\linux\TrapBattle Server.pck"    "${USER}@${IP}:/home/labadmin/TrapBattle_Server.pck"
+
+# Restart
+ssh "${USER}@${IP}" "pkill -f TrapBattle_Server; chmod +x ~/TrapBattle_Server; setsid nohup ~/TrapBattle_Server --headless < /dev/null > ~/trapserver.log 2>&1 &"
 ```
 
-What the script does:
-1. Kills any running `TrapBattle_Server` process on the VM.
-2. Copies `export/linux/TrapBattle Server.x86_64` (and `.pck`) via SCP.
-3. Sets execute bit and launches the binary with `nohup` (detached, headless).
-4. Confirms the process is running and prints a log-tail command.
-
-Logs on the VM: `ssh labadmin@172.174.208.254 'tail -f ~/trapserver.log'`
-
-> **Security note:** The VM password is stored in plaintext in `deploy.ps1`.  
-> Switch to SSH key auth and remove the password before sharing this repo.
+Tail logs: `ssh labadmin@172.174.208.254 'tail -f ~/trapserver.log'`
 
 ---
 
