@@ -3,6 +3,7 @@ extends Node3D
 var network_manager: NetworkManager
 var game_manager: GameManager
 var trap_manager: TrapManager
+var voice_manager: VoiceManager
 var _players: Dictionary = {}   # peer_id -> ServerPlayer
 
 func _ready() -> void:
@@ -12,6 +13,12 @@ func _ready() -> void:
 	network_manager.lobby_ready.connect(_on_lobby_ready)
 	network_manager.peer_left.connect(_on_peer_left)
 	network_manager.start_server()
+
+	# VoiceManager must exist at "Main/VoiceManager" from game start so that
+	# client voice RPCs sent before the game loads are routed correctly.
+	voice_manager = VoiceManager.new()
+	voice_manager.name = "VoiceManager"
+	add_child(voice_manager)
 
 func _on_lobby_ready(seed_val: int) -> void:
 	Config.maze_seed = seed_val
