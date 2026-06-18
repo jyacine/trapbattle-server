@@ -19,7 +19,7 @@ var respawning: Dictionary = {}
 var _respawn_timers: Dictionary = {}
 var _last_damager:   Dictionary = {}
 
-const RESPAWN_DELAY = 2.0
+const RESPAWN_DELAY = 5.0   # keep in sync with client (death killcam replay length)
 
 var is_playing: bool = true
 var winner_pid: int  = -1
