@@ -7,3 +7,9 @@ export/
 
 # Deploy script contains plaintext credentials — keep local only
 deploy.ps1
+
+# AI instructions — local only
+CLAUDE.md
+
+# WebRTC GDExtension native binaries (large; deployed by deploy.ps1, not tracked)
+addons/webrtc/lib/
