@@ -2,6 +2,9 @@ extends Node
 class_name VoiceManager
 
 const USE_WEBRTC := true
+# Google STUN is unreachable from this server (outbound UDP blocked, errno=101).
+# Peer connections still open via host candidates (direct IP), but srflx discovery
+# fails silently.  Add a TURN server here once credentials are available.
 const RTC_STUN   := "stun:stun.l.google.com:19302"
 const RTC_CH_ID  := 1
 
@@ -11,9 +14,16 @@ const MAX_CH_BACKLOG_PKTS            := 12     # drop-old strategy threshold
 const MIN_VOICE_PACKET_BYTES         := 8      # sanity floor
 const MAX_VOICE_PACKET_BYTES         := 1600   # sanity cap (fits MTU-friendly payloads)
 
-var _pcs:      Dictionary = {}   # pid -> WebRTCPeerConnection
-var _chs:      Dictionary = {}   # pid -> WebRTCDataChannel
-var _ch_open:  Dictionary = {}   # pid -> bool  (tracks DataChannel open transitions)
+# Diagnostic: log first WebSocket fallback per peer so we can see who isn't on UDP.
+const WS_FALLBACK_LOG_INTERVAL := 10.0   # seconds between repeated fallback warnings
+
+var _pcs:              Dictionary = {}   # pid -> WebRTCPeerConnection
+var _chs:              Dictionary = {}   # pid -> WebRTCDataChannel
+var _ch_open:          Dictionary = {}   # pid -> bool  (tracks DataChannel open transitions)
+var _ws_fallback_t:    Dictionary = {}   # pid -> float (last time we logged WS fallback)
+var _ws_pkt_count:     Dictionary = {}   # pid -> int   (WS packets since last log)
+var _rtc_pkt_count:    Dictionary = {}   # pid -> int   (DataChannel packets since last log)
+var _stats_timer:      float      = 0.0
 
 func _ready() -> void:
 	if multiplayer.has_multiplayer_peer():
@@ -36,6 +46,20 @@ func _on_peer_disconnected(pid: int) -> void:
 func _rpc_voice(audio_bytes: PackedByteArray, sender_id: int) -> void:
 	if audio_bytes.size() < MIN_VOICE_PACKET_BYTES or audio_bytes.size() > MAX_VOICE_PACKET_BYTES:
 		return
+	# This packet arrived via WebSocket (not WebRTC DataChannel) — log the first
+	# occurrence and then periodically so we can see who is stuck on the slow path.
+	var pid := multiplayer.get_remote_sender_id()
+	_ws_pkt_count[pid] = _ws_pkt_count.get(pid, 0) + 1
+	var now: float = Time.get_ticks_msec() * 0.001
+	var last_t: float = _ws_fallback_t.get(pid, -WS_FALLBACK_LOG_INTERVAL)
+	if (now - last_t) >= WS_FALLBACK_LOG_INTERVAL:
+		_ws_fallback_t[pid] = now
+		var ch: WebRTCDataChannel = _chs.get(pid)
+		var ch_state: String = "no DataChannel"
+		if ch != null:
+			var s: int = ch.get_ready_state()
+			ch_state = ["CONNECTING","OPEN","CLOSING","CLOSED"][s] if s < 4 else str(s)
+		GameLogger.warn("Voice: peer %d audio via WebSocket fallback (DataChannel=%s) — UDP path not working" % [pid, ch_state])
 	_rpc_play_voice.rpc(audio_bytes, sender_id)
 
 @rpc("authority", "call_remote", "unreliable")
@@ -133,7 +157,7 @@ func _on_pc_ice(media: String, index: int, name: String, pid: int) -> void:
 	GameLogger.info("Voice: ICE candidate (server→peer %d)  %s" % [pid, _ice_info(name)])
 	_rpc_voice_ice.rpc_id(pid, media, index, name)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _pcs.is_empty():
 		return
 
@@ -168,8 +192,24 @@ func _process(_delta: float) -> void:
 		while ch.get_available_packet_count() > 0 and processed < MAX_IN_PKTS_PER_PEER_PER_FRAME:
 			var pkt := ch.get_packet()
 			if pkt.size() >= MIN_VOICE_PACKET_BYTES and pkt.size() <= MAX_VOICE_PACKET_BYTES:
+				_rtc_pkt_count[pid] = _rtc_pkt_count.get(pid, 0) + 1
 				_forward(pid, pkt)
 			processed += 1
+
+	# Periodic stats: show UDP vs WebSocket packet counts per active peer.
+	_stats_timer += _delta
+	if _stats_timer >= 15.0:
+		_stats_timer = 0.0
+		var all_pids: Array = []
+		for pid in _ws_pkt_count.keys(): if not all_pids.has(pid): all_pids.append(pid)
+		for pid in _rtc_pkt_count.keys(): if not all_pids.has(pid): all_pids.append(pid)
+		for pid in all_pids:
+			var rtc: int = _rtc_pkt_count.get(pid, 0)
+			var ws:  int = _ws_pkt_count.get(pid, 0)
+			var path: String = "UDP/DataChannel" if rtc > 0 else "WebSocket only"
+			GameLogger.info("Voice stats peer %d — path=%s  rtc_pkts=%d  ws_pkts=%d" % [pid, path, rtc, ws])
+		_ws_pkt_count.clear()
+		_rtc_pkt_count.clear()
 
 func _forward(sender_id: int, audio: PackedByteArray) -> void:
 	var framed := PackedByteArray()
