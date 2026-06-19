@@ -5,10 +5,11 @@ const USE_WEBRTC := true
 # Google STUN is unreachable from this server (outbound UDP blocked, errno=101).
 # Peer connections still open via host candidates (direct IP), but srflx discovery
 # fails silently.  Add a TURN server here once credentials are available.
-# stun.l.google.com can resolve to IPv6, causing ENETUNREACHABLE (errno=101) on
-# servers with no IPv6 routing.  Use the numeric IPv4 address of a reliable STUN
-# server to guarantee IPv4 is used.  74.125.250.129 = stun.l.google.com IPv4.
-const RTC_STUN   := "stun:74.125.250.129:19302"
+# Outbound UDP is blocked by the Azure NSG (errno=101 ENETUNREACHABLE regardless
+# of hostname vs IPv4 literal).  STUN discovery fails but DataChannels still open
+# via host candidates (server public IP 172.174.208.254).  To fix peers behind
+# symmetric NAT: open UDP 3478 in the NSG and deploy coturn on the VM.
+const RTC_STUN   := "stun:stun.l.google.com:19302"
 const RTC_CH_ID  := 1
 
 # Relay tuning
