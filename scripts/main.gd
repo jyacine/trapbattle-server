@@ -7,6 +7,11 @@ var voice_manager: VoiceManager
 var _players: Dictionary = {}   # peer_id -> ServerPlayer
 
 func _ready() -> void:
+	# Logger must be the very first child so every subsequent _ready() can use it.
+	var logger := Logger.new()
+	logger.name = "Logger"
+	add_child(logger)
+
 	network_manager = NetworkManager.new()
 	network_manager.name = "NetworkManager"
 	add_child(network_manager)
@@ -19,6 +24,8 @@ func _ready() -> void:
 	voice_manager = VoiceManager.new()
 	voice_manager.name = "VoiceManager"
 	add_child(voice_manager)
+
+	Logger.info("Server ready — awaiting players")
 
 func _on_lobby_ready(seed_val: int) -> void:
 	Config.maze_seed = seed_val
@@ -47,10 +54,11 @@ func _on_lobby_ready(seed_val: int) -> void:
 		add_child(p)
 		_players[pid] = p
 
-	print("[Server] Game started — seed=%d  %d players" % [seed_val, _players.size()])
+	Logger.info("Game started — seed=%d  players=%d  assignments=%s" % [
+		seed_val, _players.size(), str(assignments)])
 
 func _on_peer_left(pid: int) -> void:
-	print("[Server] Player %d disconnected." % pid)
+	Logger.info("Cleaning up game state for peer %d" % pid)
 	if _players.has(pid):
 		var node = _players[pid]
 		if is_instance_valid(node):
