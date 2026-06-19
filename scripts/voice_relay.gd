@@ -200,7 +200,7 @@ func _process(delta: float) -> void:
 			processed += 1
 
 	# Periodic stats: show UDP vs WebSocket packet counts per active peer.
-	_stats_timer += _delta
+	_stats_timer += delta
 	if _stats_timer >= 15.0:
 		_stats_timer = 0.0
 		var all_pids: Array = []
