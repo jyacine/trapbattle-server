@@ -1,5 +1,5 @@
 extends Node
-class_name Logger
+class_name GameLogger
 
 # One log file per calendar day.  Files older than MAX_LOG_FILES days are
 # deleted automatically when the new file is opened (day rollover or startup).
@@ -8,7 +8,7 @@ class_name Logger
 const LOG_DIR       := "user://logs/"
 const MAX_LOG_FILES := 7
 
-static var instance: Logger = null
+static var instance: GameLogger = null
 
 var _file:         FileAccess = null
 var _current_date: String     = ""

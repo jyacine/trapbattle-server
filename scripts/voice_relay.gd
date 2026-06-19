@@ -29,7 +29,7 @@ func _on_peer_disconnected(pid: int) -> void:
 	_chs.erase(pid)
 	_ch_open.erase(pid)
 	if had_rtc:
-		Logger.info("Voice: WebRTC session closed for peer %d (channel was %s)" % [
+		GameLogger.info("Voice: WebRTC session closed for peer %d (channel was %s)" % [
 			pid, "OPEN" if ch_was_open else "not yet open"])
 
 @rpc("any_peer", "call_remote", "unreliable")
@@ -58,7 +58,7 @@ func _rpc_voice_ice(media: String, index: int, name: String) -> void:
 func _rpc_voice_offer(sdp: String) -> void:
 	if not USE_WEBRTC: return
 	var pid := multiplayer.get_remote_sender_id()
-	Logger.info("Voice: WebRTC offer received from peer %d" % pid)
+	GameLogger.info("Voice: WebRTC offer received from peer %d" % pid)
 	_ensure_pc(pid)
 	var pc: WebRTCPeerConnection = _pcs.get(pid)
 	if pc != null:
@@ -70,10 +70,10 @@ func _ensure_pc(pid: int) -> void:
 
 	var pc := WebRTCPeerConnection.new()
 	if pc.initialize({ "iceServers": [ { "urls": [RTC_STUN] } ] }) != OK:
-		Logger.warn("Voice: WebRTC peer connection init failed for peer %d" % pid)
+		GameLogger.warn("Voice: WebRTC peer connection init failed for peer %d" % pid)
 		return
 
-	Logger.info("Voice: WebRTC peer connection created for peer %d" % pid)
+	GameLogger.info("Voice: WebRTC peer connection created for peer %d" % pid)
 	pc.session_description_created.connect(_on_pc_sdp.bind(pid))
 	pc.ice_candidate_created.connect(_on_pc_ice.bind(pid))
 
@@ -95,7 +95,7 @@ func _on_pc_sdp(type: String, sdp: String, pid: int) -> void:
 	if pc == null: return
 	pc.set_local_description(type, sdp)
 	if type == "answer":
-		Logger.info("Voice: WebRTC answer sent to peer %d" % pid)
+		GameLogger.info("Voice: WebRTC answer sent to peer %d" % pid)
 		_rpc_voice_answer.rpc_id(pid, sdp)
 
 func _on_pc_ice(media: String, index: int, name: String, pid: int) -> void:
@@ -121,7 +121,7 @@ func _process(_delta: float) -> void:
 		var is_open: bool = ch.get_ready_state() == WebRTCDataChannel.STATE_OPEN
 		if is_open and not _ch_open.get(pid, false):
 			_ch_open[pid] = true
-			Logger.info("Voice: DataChannel OPEN for peer %d — UDP relay active" % pid)
+			GameLogger.info("Voice: DataChannel OPEN for peer %d — UDP relay active" % pid)
 
 		if not is_open:
 			continue

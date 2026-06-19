@@ -50,7 +50,7 @@ func register_player(pid: int) -> void:
 	effects[pid]         = {}
 	respawning[pid]      = false
 	_respawn_timers[pid] = 0.0
-	Logger.info("Player registered: pid=%d  index=%d  hp=%d  lives=%d" % [
+	GameLogger.info("Player registered: pid=%d  index=%d  hp=%d  lives=%d" % [
 		pid, player_ids.size() - 1, Config.MAX_HP, Config.PLAYER_LIVES])
 
 func _process(delta: float) -> void:
@@ -96,7 +96,7 @@ func _player_died(pid: int) -> void:
 	var killer: int = _last_damager.get(pid, -1)
 	if killer != -1 and kills.has(killer):
 		kills[killer] += 1
-	Logger.info("Player %d died  killer=%d  lives_left=%d  killer_kills=%d" % [
+	GameLogger.info("Player %d died  killer=%d  lives_left=%d  killer_kills=%d" % [
 		pid, killer, lives[pid], kills.get(killer, 0)])
 	_check_win()
 
@@ -104,17 +104,17 @@ func _check_win() -> void:
 	for pid in player_ids:
 		if kills.get(pid, 0) >= Config.KILLS_TO_WIN:
 			winner_pid = pid; is_playing = false
-			Logger.info("Game over — winner=%d (reached kill limit %d)" % [pid, Config.KILLS_TO_WIN])
+			GameLogger.info("Game over — winner=%d (reached kill limit %d)" % [pid, Config.KILLS_TO_WIN])
 			return
 	var alive: Array = []
 	for pid in player_ids:
 		if lives.get(pid, 0) > 0: alive.append(pid)
 	if alive.size() == 1:
 		winner_pid = alive[0]; is_playing = false
-		Logger.info("Game over — winner=%d (last player with lives)" % winner_pid)
+		GameLogger.info("Game over — winner=%d (last player with lives)" % winner_pid)
 	elif alive.size() == 0:
 		is_playing = false
-		Logger.info("Game over — no survivors (draw)")
+		GameLogger.info("Game over — no survivors (draw)")
 
 func has_effect(target, effect: String) -> bool:
 	return effects.get(_to_pid(target), {}).has(effect)

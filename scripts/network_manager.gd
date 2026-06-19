@@ -26,22 +26,22 @@ func start_server() -> void:
 	# proxies to this plain-ws backend. Nothing external should hit 9998 directly.
 	var err = peer.create_server(PORT, "127.0.0.1")
 	if err != OK:
-		Logger.error("Failed to start WebSocket server on port %d (err %d)" % [PORT, err])
+		GameLogger.error("Failed to start WebSocket server on port %d (err %d)" % [PORT, err])
 		return
 	multiplayer.multiplayer_peer = peer
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	Logger.info("WebSocket backend listening on 127.0.0.1:%d  (max %d players, TLS via Caddy)" % [
+	GameLogger.info("WebSocket backend listening on 127.0.0.1:%d  (max %d players, TLS via Caddy)" % [
 		PORT, Config.MAX_PLAYERS])
 
 func _on_peer_connected(id: int) -> void:
 	_peers.append(id)
-	Logger.info("Peer %d connected  (%d/%d slots filled)" % [id, _peers.size(), Config.MAX_PLAYERS])
+	GameLogger.info("Peer %d connected  (%d/%d slots filled)" % [id, _peers.size(), Config.MAX_PLAYERS])
 	_rpc_lobby_update.rpc(Array(_peers), _names, _prefs)
 
 func _on_peer_disconnected(id: int) -> void:
 	var name_str: String = _names.get(id, "<no name yet>")
-	Logger.info("Peer %d ('%s') disconnected  (%d peers remaining)" % [
+	GameLogger.info("Peer %d ('%s') disconnected  (%d peers remaining)" % [
 		id, name_str, _peers.size() - 1])
 	_peers.erase(id)
 	assignments.erase(id)
@@ -56,9 +56,9 @@ func _on_peer_disconnected(id: int) -> void:
 func _rpc_request_start() -> void:
 	if not multiplayer.is_server(): return
 	if _peers.size() < 1:
-		Logger.warn("Start requested but no players connected — ignored")
+		GameLogger.warn("Start requested but no players connected — ignored")
 		return
-	Logger.info("Start requested by peer %d" % multiplayer.get_remote_sender_id())
+	GameLogger.info("Start requested by peer %d" % multiplayer.get_remote_sender_id())
 	_do_start()
 
 func _do_start() -> void:
@@ -85,7 +85,7 @@ func _do_start() -> void:
 		taken[next_slot] = true
 		next_slot += 1
 
-	Logger.info("Starting game — seed=%d  assignments=%s" % [s, str(assignments)])
+	GameLogger.info("Starting game — seed=%d  assignments=%s" % [s, str(assignments)])
 	_rpc_start_game.rpc(s, assignments)
 	lobby_ready.emit(s)
 
@@ -95,7 +95,7 @@ func _rpc_join_info(name: String, color_idx: int) -> void:
 	var sender = multiplayer.get_remote_sender_id()
 	_names[sender] = name
 	_prefs[sender] = color_idx
-	Logger.info("Peer %d identified — name='%s'  color_slot=%d" % [sender, name, color_idx])
+	GameLogger.info("Peer %d identified — name='%s'  color_slot=%d" % [sender, name, color_idx])
 	_rpc_lobby_update.rpc(Array(_peers), _names, _prefs)
 
 # ── Broadcast lobby list to all clients ──────────────────────────────────────
