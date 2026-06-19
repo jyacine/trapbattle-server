@@ -50,6 +50,7 @@ func _rpc_voice_answer(_sdp: String) -> void:
 func _rpc_voice_ice(media: String, index: int, name: String) -> void:
 	if not USE_WEBRTC: return
 	var pid := multiplayer.get_remote_sender_id()
+	GameLogger.info("Voice: ICE candidate (peer %d→server)  %s" % [pid, _ice_info(name)])
 	var pc: WebRTCPeerConnection = _pcs.get(pid)
 	if pc != null:
 		pc.add_ice_candidate(media, index, name)
@@ -64,6 +65,19 @@ func _rpc_voice_offer(sdp: String) -> void:
 	if pc != null:
 		pc.set_remote_description("offer", sdp)
 
+# Parse "typ host/srflx/relay" and the candidate IP:port from an ICE candidate string.
+# Candidate format: "candidate:<found> <comp> <proto> <prio> <ip> <port> typ <type> ..."
+static func _ice_info(candidate: String) -> String:
+	var parts := candidate.split(" ")
+	var ip   := parts[4] if parts.size() > 4 else "?"
+	var port := parts[5] if parts.size() > 5 else "?"
+	var typ  := "?"
+	for i in range(parts.size() - 1):
+		if parts[i] == "typ":
+			typ = parts[i + 1]
+			break
+	return "%s  %s:%s" % [typ, ip, port]
+
 func _ensure_pc(pid: int) -> void:
 	if _pcs.has(pid):
 		return
@@ -76,6 +90,7 @@ func _ensure_pc(pid: int) -> void:
 	GameLogger.info("Voice: WebRTC peer connection created for peer %d" % pid)
 	pc.session_description_created.connect(_on_pc_sdp.bind(pid))
 	pc.ice_candidate_created.connect(_on_pc_ice.bind(pid))
+	pc.connection_state_changed.connect(_on_pc_state_changed.bind(pid))
 
 	var ch := pc.create_data_channel("voice", {
 		"negotiated": true,
@@ -98,7 +113,24 @@ func _on_pc_sdp(type: String, sdp: String, pid: int) -> void:
 		GameLogger.info("Voice: WebRTC answer sent to peer %d" % pid)
 		_rpc_voice_answer.rpc_id(pid, sdp)
 
+func _on_pc_state_changed(pid: int) -> void:
+	var pc: WebRTCPeerConnection = _pcs.get(pid)
+	if pc == null: return
+	var state_names := ["NEW", "CONNECTING", "CONNECTED", "DISCONNECTED", "FAILED", "CLOSED"]
+	var s: int = pc.get_connection_state()
+	var label: String = state_names[s] if s < state_names.size() else str(s)
+	if s == WebRTCPeerConnection.STATE_CONNECTED:
+		GameLogger.info("Voice: WebRTC CONNECTED to peer %d" % pid)
+	elif s == WebRTCPeerConnection.STATE_FAILED:
+		GameLogger.warn("Voice: WebRTC FAILED for peer %d — voice will fall back to WebSocket relay" % pid)
+	elif s == WebRTCPeerConnection.STATE_DISCONNECTED:
+		GameLogger.warn("Voice: WebRTC DISCONNECTED for peer %d" % pid)
+	else:
+		GameLogger.info("Voice: WebRTC state → %s  peer=%d" % [label, pid])
+
 func _on_pc_ice(media: String, index: int, name: String, pid: int) -> void:
+	# Log the server's own ICE candidates so we can see what IP/path is being offered.
+	GameLogger.info("Voice: ICE candidate (server→peer %d)  %s" % [pid, _ice_info(name)])
 	_rpc_voice_ice.rpc_id(pid, media, index, name)
 
 func _process(_delta: float) -> void:
