@@ -84,7 +84,7 @@ func damage_target(target, amount: int) -> void:
 	damage_player(_to_pid(target), amount)
 
 @rpc("any_peer", "call_remote", "reliable")
-func net_spawn_bullet(_pos: Vector3, _dir: Vector3, _owner_pid: int, _owner_idx: int) -> void:
+func net_spawn_bullet(_pos: Vector3, _dir: Vector3, _owner_pid: int, _owner_idx: int, _gun_type: int = 0) -> void:
 	pass   # no visual bullets on the dedicated server
 
 func _player_died(pid: int) -> void:
