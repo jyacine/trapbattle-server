@@ -50,7 +50,7 @@ func _cleanup_old_logs() -> void:
 	dir.list_dir_end()
 	files.sort()   # YYYY-MM-DD sorts chronologically
 	while files.size() > MAX_LOG_FILES:
-		var old := files.pop_front()
+		var old: String = files.pop_front()
 		dir.remove(old)
 		_write_line("INFO", "Log rotation: deleted %s (keeping last %d days)" % [old, MAX_LOG_FILES])
 
