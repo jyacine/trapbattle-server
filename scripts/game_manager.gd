@@ -50,6 +50,8 @@ func register_player(pid: int) -> void:
 	effects[pid]         = {}
 	respawning[pid]      = false
 	_respawn_timers[pid] = 0.0
+	GameLogger.info("Player registered: pid=%d  index=%d  hp=%d  lives=%d" % [
+		pid, player_ids.size() - 1, Config.MAX_HP, Config.PLAYER_LIVES])
 
 func _process(delta: float) -> void:
 	if not is_playing: return
@@ -82,7 +84,7 @@ func damage_target(target, amount: int) -> void:
 	damage_player(_to_pid(target), amount)
 
 @rpc("any_peer", "call_remote", "reliable")
-func net_spawn_bullet(_pos: Vector3, _dir: Vector3, _owner_pid: int, _owner_idx: int) -> void:
+func net_spawn_bullet(_pos: Vector3, _dir: Vector3, _owner_pid: int, _owner_idx: int, _gun_type: int = 0) -> void:
 	pass   # no visual bullets on the dedicated server
 
 func _player_died(pid: int) -> void:
@@ -91,22 +93,28 @@ func _player_died(pid: int) -> void:
 	effects[pid].clear()
 	respawning[pid]      = true
 	_respawn_timers[pid] = RESPAWN_DELAY
-	var killer = _last_damager.get(pid, -1)
+	var killer: int = _last_damager.get(pid, -1)
 	if killer != -1 and kills.has(killer):
 		kills[killer] += 1
+	GameLogger.info("Player %d died  killer=%d  lives_left=%d  killer_kills=%d" % [
+		pid, killer, lives[pid], kills.get(killer, 0)])
 	_check_win()
 
 func _check_win() -> void:
 	for pid in player_ids:
 		if kills.get(pid, 0) >= Config.KILLS_TO_WIN:
-			winner_pid = pid; is_playing = false; return
+			winner_pid = pid; is_playing = false
+			GameLogger.info("Game over — winner=%d (reached kill limit %d)" % [pid, Config.KILLS_TO_WIN])
+			return
 	var alive: Array = []
 	for pid in player_ids:
 		if lives.get(pid, 0) > 0: alive.append(pid)
 	if alive.size() == 1:
 		winner_pid = alive[0]; is_playing = false
+		GameLogger.info("Game over — winner=%d (last player with lives)" % winner_pid)
 	elif alive.size() == 0:
 		is_playing = false
+		GameLogger.info("Game over — no survivors (draw)")
 
 func has_effect(target, effect: String) -> bool:
 	return effects.get(_to_pid(target), {}).has(effect)

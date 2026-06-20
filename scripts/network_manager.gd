@@ -16,6 +16,9 @@ var _peers: Array = []
 # Assignments: peer_id -> player_index (populated on start)
 var assignments: Dictionary = {}
 
+# Map id chosen by the captain for the current match (relayed to all clients).
+var _game_map: int = 1
+
 # Player identity info sent by each client at connect time
 var _names: Dictionary = {}   # peer_id -> name string
 var _prefs: Dictionary = {}   # peer_id -> preferred color index
@@ -26,19 +29,23 @@ func start_server() -> void:
 	# proxies to this plain-ws backend. Nothing external should hit 9998 directly.
 	var err = peer.create_server(PORT, "127.0.0.1")
 	if err != OK:
-		push_error("[Server] Failed to start on port %d (err %d)" % [PORT, err]); return
+		GameLogger.error("Failed to start WebSocket server on port %d (err %d)" % [PORT, err])
+		return
 	multiplayer.multiplayer_peer = peer
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	print("[Server] ws backend listening on 127.0.0.1:%d  (max %d players, TLS via Caddy)" % [PORT, Config.MAX_PLAYERS])
+	GameLogger.info("WebSocket backend listening on 127.0.0.1:%d  (max %d players, TLS via Caddy)" % [
+		PORT, Config.MAX_PLAYERS])
 
 func _on_peer_connected(id: int) -> void:
 	_peers.append(id)
-	print("[Server] Peer %d joined  (%d/%d)" % [id, _peers.size(), Config.MAX_PLAYERS])
+	GameLogger.info("Peer %d connected  (%d/%d slots filled)" % [id, _peers.size(), Config.MAX_PLAYERS])
 	_rpc_lobby_update.rpc(Array(_peers), _names, _prefs)
 
 func _on_peer_disconnected(id: int) -> void:
-	print("[Server] Peer %d disconnected" % id)
+	var name_str: String = _names.get(id, "<no name yet>")
+	GameLogger.info("Peer %d ('%s') disconnected  (%d peers remaining)" % [
+		id, name_str, _peers.size() - 1])
 	_peers.erase(id)
 	assignments.erase(id)
 	_names.erase(id)
@@ -49,10 +56,13 @@ func _on_peer_disconnected(id: int) -> void:
 
 # ── Captain requests to start ─────────────────────────────────────────────────
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_request_start() -> void:
+func _rpc_request_start(map_id: int) -> void:
 	if not multiplayer.is_server(): return
 	if _peers.size() < 1:
-		print("[Server] No players connected, cannot start"); return
+		GameLogger.warn("Start requested but no players connected — ignored")
+		return
+	_game_map = map_id
+	GameLogger.info("Start requested by peer %d  (map=%d)" % [multiplayer.get_remote_sender_id(), map_id])
 	_do_start()
 
 func _do_start() -> void:
@@ -79,8 +89,8 @@ func _do_start() -> void:
 		taken[next_slot] = true
 		next_slot += 1
 
-	print("[Server] Starting game — seed=%d  players=%s" % [s, str(assignments)])
-	_rpc_start_game.rpc(s, assignments)
+	GameLogger.info("Starting game — seed=%d  map=%d  assignments=%s" % [s, _game_map, str(assignments)])
+	_rpc_start_game.rpc(s, assignments, _game_map)
 	lobby_ready.emit(s)
 
 # ── Client sends name and color preference at connect time ────────────────────
@@ -89,6 +99,7 @@ func _rpc_join_info(name: String, color_idx: int) -> void:
 	var sender = multiplayer.get_remote_sender_id()
 	_names[sender] = name
 	_prefs[sender] = color_idx
+	GameLogger.info("Peer %d identified — name='%s'  color_slot=%d" % [sender, name, color_idx])
 	_rpc_lobby_update.rpc(Array(_peers), _names, _prefs)
 
 # ── Broadcast lobby list to all clients ──────────────────────────────────────
@@ -99,7 +110,7 @@ func _rpc_lobby_update(peers: Array, names: Dictionary, color_idxs: Dictionary) 
 # ── Tell all clients to start ─────────────────────────────────────────────────
 # MUST match client's @rpc decorator exactly — Godot 4 hashes the config
 @rpc("authority", "call_local", "reliable")
-func _rpc_start_game(seed_val: int, asns: Dictionary) -> void:
+func _rpc_start_game(seed_val: int, asns: Dictionary, map_id: int) -> void:
 	pass   # stub — runs on clients only
 
 # ── Notify all clients that a peer left ──────────────────────────────────────
@@ -115,7 +126,7 @@ func _rpc_peer_left(_pid: int) -> void:
 # as empty stubs) or every index shifts and calls get misrouted/dropped.
 # Decorators must match the client's exactly.
 @rpc("authority", "call_remote", "reliable")
-func _rpc_late_join(_seed_val: int, _asns: Dictionary) -> void:
+func _rpc_late_join(_seed_val: int, _asns: Dictionary, _map_id: int) -> void:
 	pass   # stub — runs on clients only
 
 @rpc("authority", "call_local", "reliable")
@@ -136,3 +147,7 @@ func _rpc_pong(_timestamp_ms: int) -> void:
 func _process(_delta: float) -> void:
 	if multiplayer.has_multiplayer_peer():
 		multiplayer.multiplayer_peer.poll()
+
+# ── Public helper ─────────────────────────────────────────────────────────────
+var player_names: Dictionary:
+	get: return _names
