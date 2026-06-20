@@ -6,7 +6,7 @@ var maze_seed: int = 0
 
 
 # ── Map / Level selection (set from menu or directly) ──────────────────────
-# selected_map: 1 = Dungeon (brick/stone), 2 = Ice Cave (ice/frost)
+# selected_map: 1-5 = procedural layouts, 6 = fixed village layout from PNG mask
 var selected_map: int = 1
 var selected_level: String = "medium"   # "easy" | "medium" | "hard"
 
