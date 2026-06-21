@@ -74,6 +74,13 @@ func _rpc_play_voice(_audio_bytes: PackedByteArray, _sender_id: int) -> void:
 func _rpc_voice_answer(_sdp: String) -> void:
 	pass
 
+## Client → server: periodic voice quality diagnostic.
+## Alphabetically between _rpc_voice_answer and _rpc_voice_ice — MUST stay here
+## to keep RPC indices in sync with voice_manager.gd on the client.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_voice_diag(payload: String) -> void:
+	GameLogger.info("Voice diag: %s" % payload)
+
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_voice_ice(media: String, index: int, name: String) -> void:
 	if not USE_WEBRTC: return
