@@ -1,7 +1,7 @@
 extends Node
 class_name NetworkManager
 
-signal lobby_ready(seed_val: int)
+signal lobby_ready(seed_val: int, map_id: int)
 signal peer_left(pid: int)
 
 # Plain ws on localhost only. Caddy terminates TLS (wss) on the public ports
@@ -91,7 +91,7 @@ func _do_start() -> void:
 
 	GameLogger.info("Starting game — seed=%d  map=%d  assignments=%s" % [s, _game_map, str(assignments)])
 	_rpc_start_game.rpc(s, assignments, _game_map)
-	lobby_ready.emit(s)
+	lobby_ready.emit(s, _game_map)
 
 # ── Client sends name and color preference at connect time ────────────────────
 @rpc("any_peer", "call_remote", "reliable")

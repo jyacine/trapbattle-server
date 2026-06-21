@@ -27,8 +27,9 @@ func _ready() -> void:
 
 	GameLogger.info("Server ready — awaiting players")
 
-func _on_lobby_ready(seed_val: int) -> void:
-	Config.maze_seed = seed_val
+func _on_lobby_ready(seed_val: int, map_id: int) -> void:
+	Config.maze_seed   = seed_val
+	Config.selected_map = map_id
 
 	# The dedicated server is long-lived and hosts back-to-back matches. Tear down
 	# the previous match BEFORE spawning the new one — otherwise the old
