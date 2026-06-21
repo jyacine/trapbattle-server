@@ -10,6 +10,11 @@ func _ready() -> void:
 	add_to_group("players")
 	position = game_manager.grid_to_world(game_manager.get_spawn_for_index(player_index))
 
+# Stub — server doesn't use gun type visually; exists to keep RPC index in sync with client player.gd.
+@rpc("authority", "unreliable")
+func _net_gun_type(_gtype: int) -> void:
+	pass
+
 # Receive position broadcast from the authoritative client
 @rpc("authority", "unreliable")
 func _net_pos(pos: Vector3, y: float) -> void:
