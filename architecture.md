@@ -25,8 +25,9 @@ Internet (wss://<host>:443)
 |------|-------|
 | Engine | Godot 4.6.3 headless Linux export |
 | Listen address | `127.0.0.1:9998` (loopback only) |
-| Public port | `443` (Caddy), legacy `9999` |
-| VM | Azure (Ubuntu), systemd service |
+| Public port | `443` (Caddy) — legacy `9999` is blocked by the GCP firewall; clients use `443` |
+| Public domain | `34-155-15-247.nip.io` (nip.io resolves the dashed IP — no DNS to manage) |
+| VM | GCP `34.155.15.247` (europe-west9 / Paris), Ubuntu 22.04, SSH key auth. Server runs via `setsid nohup` (survives logout, not reboot); Caddy runs as a systemd service. |
 | WebRTC extension | `webrtc-native` GDExtension in `addons/webrtc/lib/` (not tracked in git — deployed by `deploy.ps1`) |
 
 Godot's embedded mbedTLS server resets browser WebSocket connections
@@ -312,7 +313,7 @@ Exit code 0 with no parse errors = good to deploy.
 
 ### deploy.ps1 (git-ignored)
 
-Copies the Linux binary and `addons/webrtc/lib/` to the Azure VM via SCP,
+Copies the Linux binary and `addons/webrtc/lib/` to the GCP VM via SCP,
 then SSHs in to `systemctl restart trapbattle-server`. Contains plaintext
 credentials — never commit it.
 
