@@ -23,6 +23,11 @@ var _game_map: int = 1
 var _names: Dictionary = {}   # peer_id -> name string
 var _prefs: Dictionary = {}   # peer_id -> preferred color index
 
+# True from the moment a match starts until the last player disconnects. While
+# true, newly connecting peers are rejected (they can't join a match in progress).
+# Resets to false when _peers empties so the next group can form a fresh lobby.
+var game_started: bool = false
+
 func start_server() -> void:
 	var peer = WebSocketMultiplayerPeer.new()
 	# Bind to loopback only: the public wss:// endpoint is fronted by Caddy, which
@@ -38,6 +43,11 @@ func start_server() -> void:
 		PORT, Config.MAX_PLAYERS])
 
 func _on_peer_connected(id: int) -> void:
+	if game_started:
+		# A match is already running. Don't add this peer to the lobby; the actual
+		# rejection (notify + disconnect) happens once they send _rpc_join_info.
+		GameLogger.info("Peer %d connected mid-match — will be rejected (game in progress)" % id)
+		return
 	_peers.append(id)
 	GameLogger.info("Peer %d connected  (%d/%d slots filled)" % [id, _peers.size(), Config.MAX_PLAYERS])
 	_rpc_lobby_update.rpc(Array(_peers), _names, _prefs)
@@ -53,6 +63,11 @@ func _on_peer_disconnected(id: int) -> void:
 	_rpc_peer_left.rpc(id)
 	_rpc_lobby_update.rpc(Array(_peers), _names, _prefs)
 	peer_left.emit(id)
+	# Once everyone has left, drop back to "lobby" so a fresh group can start a new
+	# match (otherwise game_started would stay true forever and reject all joiners).
+	if _peers.is_empty():
+		game_started = false
+		GameLogger.info("All players left — server reset to lobby (accepting new players)")
 
 # ── Captain requests to start ─────────────────────────────────────────────────
 @rpc("any_peer", "call_remote", "reliable")
@@ -89,6 +104,7 @@ func _do_start() -> void:
 		taken[next_slot] = true
 		next_slot += 1
 
+	game_started = true
 	GameLogger.info("Starting game — seed=%d  map=%d  assignments=%s" % [s, _game_map, str(assignments)])
 	_rpc_start_game.rpc(s, assignments, _game_map)
 	lobby_ready.emit(s, _game_map)
@@ -97,6 +113,16 @@ func _do_start() -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_join_info(name: String, color_idx: int) -> void:
 	var sender = multiplayer.get_remote_sender_id()
+	if game_started:
+		# Reject: the match is already running. Tell the client (it shows a message
+		# then returns to the menu), then disconnect after a short delay so the
+		# reliable RPC has time to land before the socket closes.
+		GameLogger.info("Rejecting peer %d ('%s') — game already in progress" % [sender, name])
+		_rpc_game_in_progress.rpc_id(sender)
+		get_tree().create_timer(1.5).timeout.connect(func():
+			if multiplayer.has_multiplayer_peer():
+				multiplayer.multiplayer_peer.disconnect_peer(sender))
+		return
 	_names[sender] = name
 	_prefs[sender] = color_idx
 	GameLogger.info("Peer %d identified — name='%s'  color_slot=%d" % [sender, name, color_idx])
@@ -119,18 +145,15 @@ func _rpc_start_game(seed_val: int, asns: Dictionary, map_id: int) -> void:
 func _rpc_peer_left(_pid: int) -> void:
 	pass   # stub — runs on clients only
 
-# ── Late-join RPC stubs ───────────────────────────────────────────────────────
-# These run only on clients, but they MUST be declared here too. Godot 4 sends
-# each RPC by its index in the node's alphabetically-sorted list of @rpc methods,
-# so the client and server must declare the IDENTICAL set of @rpc methods (even
-# as empty stubs) or every index shifts and calls get misrouted/dropped.
-# Decorators must match the client's exactly.
+# ── Mid-game rejection RPC ────────────────────────────────────────────────────
+# Server → late-connecting client: "the match is already running". The client
+# shows a message and returns to the menu. Declared here (the server is the one
+# that CALLS it) and as a receiver stub on the client. Godot 4 sends each RPC by
+# its index in the node's alphabetically-sorted list of @rpc methods, so client
+# and server MUST declare the IDENTICAL set of @rpc methods (matching decorators)
+# or every index shifts and calls get misrouted/dropped.
 @rpc("authority", "call_remote", "reliable")
-func _rpc_late_join(_seed_val: int, _asns: Dictionary, _map_id: int) -> void:
-	pass   # stub — runs on clients only
-
-@rpc("authority", "call_local", "reliable")
-func _rpc_spawn_late_peer(_pid: int, _player_index: int) -> void:
+func _rpc_game_in_progress() -> void:
 	pass   # stub — runs on clients only
 
 # ── Ping / pong ───────────────────────────────────────────────────────────────
